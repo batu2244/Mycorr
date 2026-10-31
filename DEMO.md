@@ -13,7 +13,8 @@ npm install -g bun            # Bun 1.4.2+ is required by durable-actors
 bun install
 bun run actors:dev            # terminal 1: local actor runtime on http://127.0.0.1:7100
 bun run actors:generate       # once, or after changing packages/actors/src/actors.ts
-bun run api:dev               # terminal 2: API + web page on http://127.0.0.1:3000
+cp .env.example .env && edit    # set MODEL_PROVIDER=openai + OPENAI_API_KEY for real agents, or MODEL_PROVIDER=mock
+bun run api:dev               # terminal 2 (from repo root so .env loads): API + web page on http://127.0.0.1:3000
 bun test tests                # 14 tests (contracts, actors on the real runtime, mock model)
 bun run scripts/seed.ts 2     # or 5: creates a trip and prints ids + example answers
 bun run scripts/smoke.ts 5    # end to end over HTTP: onboarding -> auto run -> transcript
@@ -40,13 +41,6 @@ curl -s -X POST $B/trips/<tripId>/runs                 -H 'x-mycorr-user: ana'  
 
 ## Status (honest)
 
-Checked in mock mode on 2026-10-31: 2-person and 5-person flows complete; readiness is computed by
-schema rules; an ambiguous budget triggers a clarification; stale follow-ups are discarded;
-duplicate readiness events do not start duplicate runs; transcript capture is deduplicated and
-reconciled against relay history; JSON and text exports return the saved conversation.
+Checked on 2026-10-31 with real OpenAI models (MODEL_PROVIDER=openai, planning gpt-5.4-mini, onboarding gpt-5.4): restaurant-only friendly onboarding asks one follow-up on a vague answer and completes on a specific one; readiness computed in code; a 2-person run completed in about 11 s with a concrete Lisbon itinerary, conflicts and constraint report exposed separately; JSON and text exports return the saved conversation. Mock mode (MODEL_PROVIDER=mock) still runs the 2- and 5-person flows deterministically.
 
-Not checked against real services (no credentials in this environment): OpenAI model calls
-(`packages/integrations/src/model/openai.ts` is written against SDK 7.47.0 but unexercised),
-Superserve VMs, Agent Relay. The separate `apps/worker` coordinator, the agent runner package,
-the real Relay/Superserve adapters and the webhook are not built in this demo slice. The full
-design and build order remain in README.md.
+Not checked against real services: Superserve VMs and Agent Relay (in-memory mock Relay is used; the separate apps/worker coordinator, agent runner package, real adapters and webhook are not built). Note: the Durable Actors dev server bundles packages/contracts at start; restart it after changing contracts.

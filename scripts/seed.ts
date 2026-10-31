@@ -9,7 +9,7 @@ const users = ["ana", "ben", "cat", "dan", "eve"].slice(0, count)
 const r = await fetch(`${base}/api/trips`, {
   method: "POST",
   headers: { "content-type": "application/json", "x-mycorr-user": users[0]! },
-  body: JSON.stringify({ title: `Lisbon weekend (${count} people)`, city: "Lisbon", timezone: "Europe/Lisbon", dateRange: { start: "2026-11-20", end: "2026-11-22" }, participantIds: users.slice(1) }),
+  body: JSON.stringify({ title: `Lisbon weekend (${count} people)`, city: "Lisbon", dateRange: { start: "2026-11-20", end: "2026-11-22" }, participantIds: users.slice(1) }),
 })
 if (!r.ok) throw new Error(`seed failed: ${r.status} ${await r.text()}`)
 const view = await r.json()

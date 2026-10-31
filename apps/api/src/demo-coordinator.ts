@@ -22,7 +22,8 @@ import { PERSONAL_SYSTEM, QUESTION_SYSTEM } from "./prompts.js"
 
 const env = loadEnv()
 const model: ModelProvider = createModelProvider(env)
-console.log(`[demo-coordinator] model provider=${model.name} model=${model.modelId}`)
+const questionModel: ModelProvider = env.QUESTION_MODEL_ID ? createModelProvider(env, { modelId: env.QUESTION_MODEL_ID }) : model
+console.log(`[demo-coordinator] model provider=${model.name} planning=${model.modelId} question=${questionModel.modelId}`)
 const relay = new MockRelay()
 const WORKER = `api-demo-${process.pid}`
 const inflight = new Set<string>()
@@ -37,7 +38,7 @@ export async function processUser(userId: string): Promise<void> {
     for (let i = 0; i < 10; i++) {
       const ctx = await user.claimQuestionTask(WORKER, 60_000)
       if (!ctx) break
-      const result = await model.complete({ system: QUESTION_SYSTEM, user: JSON.stringify(ctx), schema: questionAgentOutputSchema, schemaName: "question_agent_output" })
+      const result = await questionModel.complete({ system: QUESTION_SYSTEM, user: JSON.stringify(ctx), schema: questionAgentOutputSchema, schemaName: "question_agent_output" })
       if (!result.ok) {
         await user.failQuestionTask(ctx.task.taskId, result.error, result.retryable)
         if (!result.retryable) break

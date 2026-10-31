@@ -23,7 +23,7 @@ const call = async (path: string, user: string, init?: RequestInit) => {
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-const view = await call("/trips", users[0]!, { method: "POST", body: JSON.stringify({ title: `Lisbon x${count}`, city: "Lisbon", timezone: "Europe/Lisbon", dateRange: { start: "2026-11-20", end: "2026-11-22" }, participantIds: users.slice(1) }) })
+const view = await call("/trips", users[0]!, { method: "POST", body: JSON.stringify({ title: `Lisbon x${count}`, city: "Lisbon", dateRange: { start: "2026-11-20", end: "2026-11-22" }, participantIds: users.slice(1) }) })
 const tripId = view.trip.tripId as string
 console.log(`trip ${tripId} participants=${users.join(",")}`)
 // All users answer concurrently (exercises per-user isolation and the per-session task queue).

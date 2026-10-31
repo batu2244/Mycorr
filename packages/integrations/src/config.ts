@@ -28,6 +28,8 @@ const envSchema = z.object({
   /** Optional override, for example an Azure OpenAI or proxy endpoint. */
   OPENAI_BASE_URL: z.string().url().optional(),
   MODEL_ID: z.string().default("gpt-6.1-sol"),
+  /** Optional separate model for the question (onboarding) role. */
+  QUESTION_MODEL_ID: z.string().optional(),
   MODEL_EFFORT: z.enum(["low", "medium", "high"]).default("medium"),
 
   // Superserve

@@ -33,7 +33,7 @@
     <h2>1. Create a trip</h2>
     <label>Creator (demo user id)</label><input id="creator" value="ana" />
     <label>Title</label><input id="title" value="Lisbon weekend" />
-    <div class="row"><div><label>City</label><input id="city" value="Lisbon" /></div><div><label>Timezone</label><input id="tz" value="Europe/Lisbon" /></div></div>
+    <label>City</label><input id="city" value="Lisbon" />
     <div class="row"><div><label>Start</label><input id="start" type="date" value="2026-11-20" /></div><div><label>End</label><input id="end" type="date" value="2026-11-22" /></div></div>
     <label>Other participants (comma separated ids)</label><input id="participants" value="ben" />
     <button id="create">Create trip</button>
@@ -45,7 +45,7 @@
     <label>Trip id</label><input id="tripId" placeholder="trip_..." />
     <label>I am (demo user id)</label><input id="me" value="ana" />
     <div class="chat" id="chat"></div>
-    <div class="row"><input id="text" placeholder="e.g. Free the whole weekend, €100/day all-in, love food, no bars" /><button id="send" style="flex:0 0 auto">Send</button></div>
+    <div class="row"><input id="text" placeholder="type like you would to a friend…" /><button id="send" style="flex:0 0 auto">Send</button></div>
     <div class="muted" id="status"></div>
   </section>
 
@@ -73,7 +73,7 @@ fetch('/health').then(r => r.json()).then(h => $('mode').textContent = 'mode: ' 
 $('create').onclick = async () => {
   try {
     const participantIds = $('participants').value.split(',').map(s => s.trim()).filter(Boolean);
-    const view = await api('/trips', { method: 'POST', body: JSON.stringify({ title: $('title').value, city: $('city').value, timezone: $('tz').value, dateRange: { start: $('start').value, end: $('end').value }, participantIds }) }, $('creator').value);
+    const view = await api('/trips', { method: 'POST', body: JSON.stringify({ title: $('title').value, city: $("city").value, dateRange: { start: $('start').value, end: $('end').value }, participantIds }) }, $('creator').value);
     $('tripId').value = view.trip.tripId; $('me').value = $('creator').value;
     $('tripInfo').textContent = `created ${view.trip.tripId} with ${view.trip.participantIds.join(', ')}`;
     await poll();
@@ -85,7 +85,8 @@ async function poll() {
   const tripId = $('tripId').value.trim(); if (!tripId) return;
   try {
     const ob = await api(`/trips/${tripId}/onboarding`);
-    $('chat').innerHTML = ob.messages.map(m => `<div class="msg ${m.role}">${escapeHtml(m.text)}</div>`).join('');
+    const opener = ob.messages.length ? "" : `<div class="msg assistant">quick one, are you into restaurants when you travel?</div>`;
+    $("chat").innerHTML = opener + ob.messages.map(m => `<div class="msg ${m.role}">${escapeHtml(m.text)}</div>`).join("");
     $('chat').scrollTop = $('chat').scrollHeight;
     const pending = ob.pendingTask ? ` · agent is thinking (${ob.pendingTask.status})` : '';
     $('status').innerHTML = `<span class="${ob.session.status === 'ready' ? 'ready' : 'pending'}">${ob.session.status}</span> · missing: ${ob.missingFields.join(', ') || 'none'}${pending}`;
