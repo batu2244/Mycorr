@@ -39,7 +39,7 @@ These items are also out of scope: bookings, payments, production deployment, a 
 - Use TypeScript throughout. Use one repository.
 - Prefer a small Next.js frontend and backend, a separate long-running coordinator worker, and Terse's local development runtime. Use a different thin HTTP framework only if the existing repository makes that simpler.
 - Use Zod, or an equivalent runtime validator, to validate profiles, events, API inputs, and model outputs.
-- Implement one model-provider integration behind an adapter. Choose the available provider. Make the model configurable.
+- Implement one model-provider integration behind an adapter. The provider is OpenAI, through the Responses API with structured outputs. The default model is `gpt-6.1-sol`. Make the model configurable with `MODEL_ID`.
 - Use a package manager and runtime that the pinned Durable Actors release supports. Commit a lockfile.
 - Keep the coordinator outside the VMs that it pauses, so that it can resume them.
 - Do not run long planning jobs inside an HTTP request. Do not hold a trip actor call open while a model runs.
@@ -264,7 +264,7 @@ Create a `.env.example` with the actual variables that the selected SDKs require
 
 - actor connection settings
 - Superserve credentials
-- model credentials and model choice
+- `OPENAI_API_KEY`, `MODEL_ID`, and `MODEL_EFFORT`
 - server-side Relay bootstrap configuration
 - `PUBLIC_BACKEND_URL`: the Superserve preview URL that VMs can reach
 - `SUPERSERVE_SANDBOX_ID` and `SUPERSERVE_PREVIEW_TOKEN` for the published backend port

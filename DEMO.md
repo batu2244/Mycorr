@@ -4,7 +4,7 @@ What runs: real local Durable Actors persistence, the Hono API, a minimal web pa
 **in-process demo coordinator** (`apps/api/src/demo-coordinator.ts`) that drives the question
 agent, readiness, the planning run, the Relay recorder and the result. External services are
 **mock adapters** (deterministic rule-based model, in-memory Relay). This proves the workflow and
-persistence, not the Superserve/Relay/Anthropic integrations (see "Status" below).
+persistence, not the Superserve/Relay/OpenAI integrations (see "Status" below).
 
 ## Run it
 
@@ -45,8 +45,8 @@ schema rules; an ambiguous budget triggers a clarification; stale follow-ups are
 duplicate readiness events do not start duplicate runs; transcript capture is deduplicated and
 reconciled against relay history; JSON and text exports return the saved conversation.
 
-Not checked against real services (no credentials in this environment): Anthropic model calls
-(`packages/integrations/src/model/anthropic.ts` is written against SDK 1.3.0 but unexercised),
+Not checked against real services (no credentials in this environment): OpenAI model calls
+(`packages/integrations/src/model/openai.ts` is written against SDK 7.47.0 but unexercised),
 Superserve VMs, Agent Relay. The separate `apps/worker` coordinator, the agent runner package,
 the real Relay/Superserve adapters and the webhook are not built in this demo slice. The full
 design and build order remain in README.md.

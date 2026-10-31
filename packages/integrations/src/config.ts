@@ -23,9 +23,11 @@ const envSchema = z.object({
   SERVICE_TOKEN: z.string().min(8).default("dev-only-service-token"),
 
   // Model
-  MODEL_PROVIDER: z.enum(["anthropic", "mock"]).optional(),
-  ANTHROPIC_API_KEY: z.string().optional(),
-  MODEL_ID: z.string().default("claude-opus-5-5"),
+  MODEL_PROVIDER: z.enum(["openai", "mock"]).optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  /** Optional override, for example an Azure OpenAI or proxy endpoint. */
+  OPENAI_BASE_URL: z.string().url().optional(),
+  MODEL_ID: z.string().default("gpt-6.1-sol"),
   MODEL_EFFORT: z.enum(["low", "medium", "high"]).default("medium"),
 
   // Superserve
@@ -73,15 +75,15 @@ export function isIntegrated(env: Env): boolean {
 }
 
 /** Which provider to use for the model, resolved from mode and credentials. Never silently downgrades. */
-export function modelProviderFor(env: Env): "anthropic" | "mock" {
+export function modelProviderFor(env: Env): "openai" | "mock" {
   if (env.MODEL_PROVIDER) return env.MODEL_PROVIDER
-  return isIntegrated(env) ? "anthropic" : "mock"
+  return isIntegrated(env) ? "openai" : "mock"
 }
 
 /** Lists the integrated-mode prerequisites that are missing, so callers can refuse loudly. */
 export function missingIntegratedConfig(env: Env): string[] {
   const missing: string[] = []
-  if (!env.ANTHROPIC_API_KEY && modelProviderFor(env) === "anthropic") missing.push("ANTHROPIC_API_KEY")
+  if (!env.OPENAI_API_KEY && modelProviderFor(env) === "openai") missing.push("OPENAI_API_KEY")
   if (!env.SUPERSERVE_API_KEY) missing.push("SUPERSERVE_API_KEY")
   if (!env.SUPERSERVE_SANDBOX_ID) missing.push("SUPERSERVE_SANDBOX_ID")
   if (!env.SUPERSERVE_PREVIEW_TOKEN) missing.push("SUPERSERVE_PREVIEW_TOKEN")
