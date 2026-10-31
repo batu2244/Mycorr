@@ -72,7 +72,7 @@ flowchart TD
     R -->|"Messages and history"| W
 ```
 
-During development, run the web/API, the coordinator, and the actor runtime locally. Run real agent sessions in Superserve and connect them to Relay. A VM cannot reach the laptop's `localhost`. Document an authenticated development tunnel, or an equivalent backend URL that the VM can reach. Keep the actor runtime credentials and the provider administration credentials behind the backend.
+During development, run the web/API, the coordinator, and the actor runtime locally. Run real agent sessions in Superserve and connect them to Relay. A VM cannot reach the laptop's `localhost`. Use a Superserve preview URL as the backend URL that the VMs can reach. Section 11 describes the setup. Keep the actor runtime credentials and the provider administration credentials behind the backend.
 
 ## 5. Configurable profile requirements
 
@@ -264,7 +264,8 @@ Create a `.env.example` with the actual variables that the selected SDKs require
 - Superserve credentials
 - model credentials and model choice
 - server-side Relay bootstrap configuration
-- the backend URL that VMs can reach
+- `PUBLIC_BACKEND_URL`: the Superserve preview URL that VMs can reach
+- `SUPERSERVE_SANDBOX_ID` and `SUPERSERVE_PREVIEW_TOKEN` for the published backend port
 - agent-service authentication
 - mode selection
 - optional webhook settings
@@ -282,6 +283,43 @@ The implementation must provide and document commands for these tasks:
 - Run a smoke test.
 
 Add runnable scripts. Do not present proposed commands as commands that already work.
+
+### Public backend URL through Superserve
+
+Agent VMs run in Superserve. They cannot reach `localhost` on a laptop. Superserve preview URLs solve this. A preview URL publishes one port of a sandbox at this address:
+
+```
+https://{port}-{sandbox-id}.sandbox.superserve.ai
+```
+
+For development, run the backend inside a Superserve sandbox. Publish the API port. Give the agents that URL as `PUBLIC_BACKEND_URL`.
+
+These commands use CLI version 2.1.1. We checked them against the CLI help and docs.superserve.ai on 2026-10-31. Replace `<id>` with the `id` field from the create command. Do not use the name, because names are not unique.
+
+```bash
+npm install -g @superserve/cli
+superserve login --no-wait --json
+# The command prints a URL and a code. Open the URL, confirm the code, and click Authorize.
+# Then run the same login command again. It prints "logged_in": true.
+
+superserve sandbox create --name mycorr-backend --json
+superserve cp . <id>:/home/user/mycorr
+superserve exec <id> "cd /home/user/mycorr && npm install && nohup npm run dev >/tmp/web.log 2>&1 &"
+
+superserve preview publish <id> 3000 --private
+superserve preview url <id> 3000
+superserve preview token <id> 3000
+```
+
+Rules for the preview URL:
+
+- Publish the API port as private. A private port requires a token. Agents send the token in the request header. Browsers open a signed URL from `superserve preview url <id> 3000 --signed --expires 1h`.
+- Use `--public` only for a short demo. A public port is reachable from the internet without a credential.
+- Store the sandbox ID and the token in `.env`. Never commit them. Run `superserve preview rotate <id> 3000` if a token leaks.
+- The same calls exist in the TypeScript SDK: `publishPreviewPort`, `getPreviewUrl`, `getPreviewToken`, `getSignedPreviewUrl`, `rotatePreviewToken`, and `unpublishPreviewPort`.
+- A preview URL is a development convenience. It is not production deployment, which stays out of scope.
+
+Status on 2026-10-31: the CLI install and the login command ran. Sandbox creation and port publishing wait for browser authorization of the login. The commands above are not yet proven end to end.
 
 ## 12. Build order
 
