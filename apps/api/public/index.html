@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mycorr Demo</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --text:#e8eaf0; --muted:#9aa3b2; --accent:#7c9cff; --ok:#4cd98a; --warn:#f5b454; }
+  * { box-sizing:border-box } body { margin:0; font:15px/1.45 system-ui,sans-serif; background:var(--bg); color:var(--text) }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; gap:16px; align-items:center; flex-wrap:wrap }
+  header h1 { font-size:18px; margin:0 } .tag { font-size:12px; color:var(--muted) }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px; max-width:1300px; margin:0 auto }
+  @media (max-width:900px){ main { grid-template-columns:1fr } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px }
+  .panel h2 { margin:0 0 10px; font-size:15px } label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px }
+  input, textarea, select { width:100%; background:#0f1218; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit }
+  button { background:var(--accent); color:#0b0d12; border:0; border-radius:6px; padding:8px 12px; font-weight:600; cursor:pointer; margin-top:8px } button.secondary { background:#2a2f3a; color:var(--text) }
+  .chat { height:280px; overflow:auto; border:1px solid var(--line); border-radius:6px; padding:8px; background:#0f1218 }
+  .msg { margin:6px 0; padding:6px 8px; border-radius:6px; max-width:90% } .user { background:#243055; margin-left:auto } .assistant { background:#1f2a22 }
+  .ready { color:var(--ok) } .pending { color:var(--warn) } pre { white-space:pre-wrap; font-size:12px; background:#0f1218; padding:10px; border-radius:6px; max-height:420px; overflow:auto }
+  .row { display:flex; gap:8px; align-items:center } .row > * { flex:1 } .muted { color:var(--muted); font-size:12px }
+  .wide { grid-column: 1 / -1 }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mycorr</h1>
+  <span class="tag">personal agents that plan a trip together · demo (development identities)</span>
+  <span class="tag" id="mode"></span>
+</header>
+<main>
+  <section class="panel">
+    <h2>1. Create a trip</h2>
+    <label>Creator (demo user id)</label><input id="creator" value="ana" />
+    <label>Title</label><input id="title" value="Lisbon weekend" />
+    <div class="row"><div><label>City</label><input id="city" value="Lisbon" /></div><div><label>Timezone</label><input id="tz" value="Europe/Lisbon" /></div></div>
+    <div class="row"><div><label>Start</label><input id="start" type="date" value="2026-11-20" /></div><div><label>End</label><input id="end" type="date" value="2026-11-22" /></div></div>
+    <label>Other participants (comma separated ids)</label><input id="participants" value="ben" />
+    <button id="create">Create trip</button>
+    <div class="muted" id="tripInfo"></div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Private onboarding (one tab per person)</h2>
+    <label>Trip id</label><input id="tripId" placeholder="trip_..." />
+    <label>I am (demo user id)</label><input id="me" value="ana" />
+    <div class="chat" id="chat"></div>
+    <div class="row"><input id="text" placeholder="e.g. Free the whole weekend, €100/day all-in, love food, no bars" /><button id="send" style="flex:0 0 auto">Send</button></div>
+    <div class="muted" id="status"></div>
+  </section>
+
+  <section class="panel wide">
+    <h2>3. Group planning run (starts automatically when everyone is ready)</h2>
+    <div class="row">
+      <div id="readiness" class="muted">readiness: –</div>
+      <button class="secondary" id="refresh" style="flex:0 0 auto">Refresh</button>
+      <button class="secondary" id="rerun" style="flex:0 0 auto">Manual rerun</button>
+      <a id="txt" class="muted" href="#" target="_blank" style="flex:0 0 auto">open plain-text transcript ↗</a>
+    </div>
+    <pre id="run">no run yet</pre>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const api = async (path, opts = {}, user) => {
+  const r = await fetch('/api' + path, { ...opts, headers: { 'Content-Type': 'application/json', 'x-mycorr-user': user || $('me').value, ...(opts.headers || {}) } });
+  const body = r.headers.get('content-type')?.includes('json') ? await r.json() : await r.text();
+  if (!r.ok) throw new Error(body?.error?.message || r.statusText);
+  return body;
+};
+fetch('/health').then(r => r.json()).then(h => $('mode').textContent = 'mode: ' + h.mode).catch(() => {});
+
+$('create').onclick = async () => {
+  try {
+    const participantIds = $('participants').value.split(',').map(s => s.trim()).filter(Boolean);
+    const view = await api('/trips', { method: 'POST', body: JSON.stringify({ title: $('title').value, city: $('city').value, timezone: $('tz').value, dateRange: { start: $('start').value, end: $('end').value }, participantIds }) }, $('creator').value);
+    $('tripId').value = view.trip.tripId; $('me').value = $('creator').value;
+    $('tripInfo').textContent = `created ${view.trip.tripId} with ${view.trip.participantIds.join(', ')}`;
+    await poll();
+  } catch (e) { $('tripInfo').textContent = 'error: ' + e.message; }
+};
+
+let lastRunId;
+async function poll() {
+  const tripId = $('tripId').value.trim(); if (!tripId) return;
+  try {
+    const ob = await api(`/trips/${tripId}/onboarding`);
+    $('chat').innerHTML = ob.messages.map(m => `<div class="msg ${m.role}">${escapeHtml(m.text)}</div>`).join('');
+    $('chat').scrollTop = $('chat').scrollHeight;
+    const pending = ob.pendingTask ? ` · agent is thinking (${ob.pendingTask.status})` : '';
+    $('status').innerHTML = `<span class="${ob.session.status === 'ready' ? 'ready' : 'pending'}">${ob.session.status}</span> · missing: ${ob.missingFields.join(', ') || 'none'}${pending}`;
+    const view = await api(`/trips/${tripId}`);
+    $('readiness').innerHTML = 'readiness: ' + view.readiness.map(p => `<span class="${p.ready ? 'ready' : 'pending'}">${p.userId}${p.ready ? ' ✓' : ' …'}</span>`).join('  ');
+    const runId = view.activeRunId || view.runIds[view.runIds.length - 1];
+    if (runId) {
+      lastRunId = runId;
+      const rv = await api(`/trips/${tripId}/runs/${runId}`);
+      $('txt').href = `/api/trips/${tripId}/runs/${runId}/transcript?format=txt`;
+      $('txt').onclick = (ev) => { ev.preventDefault(); openTxt(tripId, runId); };
+      const lines = [`run ${runId}  status=${rv.run.status}  capture=${rv.run.captureStatus}  round=${rv.run.currentRound}  modelCalls=${rv.run.modelCalls}`, ''];
+      lines.push('--- conversation ---');
+      for (const m of rv.transcript) lines.push(`[${m.sequence}] ${m.senderAgentId}: ${m.text}`);
+      if (rv.run.result) {
+        lines.push('', '--- summary ---', rv.run.result.summary, '', '--- draft itinerary (unverified estimates) ---');
+        for (const d of rv.run.result.itinerary?.days || []) { lines.push(d.date); for (const i of d.items) lines.push(`  ${i.startTime || ''}-${i.endTime || ''} ${i.title} [${i.category}] ~${((i.estimatedCostMinor || 0) / 100).toFixed(0)} ${i.currency || ''}`); }
+        lines.push('', '--- conflicts ---', ...(rv.run.result.conflicts.length ? rv.run.result.conflicts.map(c => `- ${c.topic}: ${c.description}`) : ['(none)']));
+      }
+      if (rv.run.failure) lines.push('', 'failure: ' + rv.run.failure);
+      $('run').textContent = lines.join('\n');
+    }
+  } catch (e) { $('status').textContent = 'error: ' + e.message; }
+}
+async function openTxt(tripId, runId) {
+  const r = await fetch(`/api/trips/${tripId}/runs/${runId}/transcript?format=txt`, { headers: { 'x-mycorr-user': $('me').value } });
+  const w = window.open('', '_blank'); w.document.write('<pre style="white-space:pre-wrap;font:13px monospace">' + escapeHtml(await r.text()) + '</pre>');
+}
+$('send').onclick = async () => {
+  const tripId = $('tripId').value.trim(); const text = $('text').value.trim(); if (!tripId || !text) return;
+  $('text').value = '';
+  try { await api(`/trips/${tripId}/onboarding/messages`, { method: 'POST', body: JSON.stringify({ clientMessageId: crypto.randomUUID(), text }) }); } catch (e) { $('status').textContent = 'error: ' + e.message; }
+  setTimeout(poll, 600);
+};
+$('text').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('send').click(); });
+$('refresh').onclick = poll;
+$('rerun').onclick = async () => { try { await api(`/trips/${$('tripId').value.trim()}/runs`, { method: 'POST' }); } catch (e) { $('status').textContent = 'error: ' + e.message; } setTimeout(poll, 800); };
+const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+setInterval(poll, 2500);
+</script>
+</body>
+</html>

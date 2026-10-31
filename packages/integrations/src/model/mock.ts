@@ -234,7 +234,14 @@ export function mockPersonalTurn(ctx: PersonalTurnContext): PersonalAgentTurnOut
   const tripDays = days(ctx.trip.dateRange)
 
   if (ctx.phase === "propose") {
-    const perItem = Math.floor(dailyCap / 2)
+    // Learn from earlier rounds: drop categories other agents flagged as something they asked to avoid.
+    const flagged = new Set(ctx.evaluations.flatMap((e) => e.hardConstraintViolations.map((v) => v.match(/is a (\w+) activity/)?.[1]).filter((c): c is string => !!c)))
+    const usable = interests.filter((c) => !flagged.has(c))
+    if (usable.length) interests.splice(0, interests.length, ...usable)
+    else if (flagged.size) interests.splice(0, interests.length, ...["food", "nature", "restaurants", "museums", "bars"].filter((c) => !flagged.has(c) && !dislikes.has(c)).slice(0, 2))
+    const capsSeen = ctx.evaluations.flatMap((e) => e.hardConstraintViolations.map((v) => v.match(/exceeds my daily budget (\d+)/)?.[1]).filter((c): c is string => !!c)).map((c) => Number(c) * 100)
+    const effectiveCap = Math.min(dailyCap, ...capsSeen)
+    const perItem = Math.floor(effectiveCap / 2)
     const items = tripDays.flatMap((day, i) => {
       const a = interests[i % interests.length]!
       const b = interests[(i + 1) % interests.length]!
@@ -244,14 +251,14 @@ export function mockPersonalTurn(ctx: PersonalTurnContext): PersonalAgentTurnOut
       ]
     })
     return {
-      message: `[${ctx.self.agentName}] Proposal for ${ctx.trip.city}: ${interests.join(" + ")} across ${tripDays.length} day(s), about ${(dailyCap / 100).toFixed(0)} ${currency}/day (unverified estimates).`,
+      message: `[${ctx.self.agentName}] Proposal for ${ctx.trip.city}: ${interests.join(" + ")} across ${tripDays.length} day(s), about ${(effectiveCap / 100).toFixed(0)} ${currency}/day (unverified estimates).`,
       proposal: { title: `${capitalize(interests[0]!)}-first plan`, items, notes: "Mock proposal derived from stated interests and daily budget." },
     }
   }
 
   if (ctx.phase === "evaluate") {
     const evaluations = ctx.proposals
-      .filter((p) => p.byUserId !== ctx.self.userId)
+      .filter((p) => p.byUserId !== ctx.self.userId && p.round === ctx.round)
       .map((p) => {
         const violations: string[] = []
         const concerns: string[] = []
@@ -270,14 +277,19 @@ export function mockPersonalTurn(ctx: PersonalTurnContext): PersonalAgentTurnOut
   }
 
   if (ctx.phase === "assemble") {
-    const rejected = new Set(ctx.evaluations.filter((e) => e.verdict === "reject").map((e) => e.proposalId))
-    const accepted = ctx.proposals.filter((p) => !rejected.has(p.proposalId))
-    const pool = accepted.length ? accepted : ctx.proposals
+    const current = ctx.proposals.filter((p) => p.round === ctx.round)
+    const rejected = new Set(ctx.evaluations.filter((e) => e.verdict === "reject" && e.round === ctx.round).map((e) => e.proposalId))
+    const accepted = current.filter((p) => !rejected.has(p.proposalId))
+    const pool = accepted.length ? accepted : current
     const itineraryDays = tripDays.map((date) => {
-      const items = pool.flatMap((p) => p.items.filter((i) => i.day === date)).slice(0, 2)
+      // One slot per accepted proposal so every participant's interests appear; alternate morning/evening slots.
+      const items = pool
+        .map((p, k) => p.items.filter((i) => i.day === date)[k % 2] ?? p.items.find((i) => i.day === date))
+        .filter((i): i is NonNullable<typeof i> => !!i)
+        .slice(0, 2)
       return { date, items }
     })
-    const conflicts = ctx.proposals
+    const conflicts = current
       .filter((p) => rejected.has(p.proposalId))
       .map((p) => ({
         topic: `Proposal "${p.title}" rejected`,

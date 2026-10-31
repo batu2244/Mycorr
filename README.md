@@ -1,5 +1,7 @@
 # Mycorr: First Draft Build Brief
 
+> Demo quickstart and current status: see [DEMO.md](DEMO.md).
+
 This README is an implementation brief for Claude. The project is named Mycorr. Build the first working version of Mycorr as this brief describes it. This document describes intended behavior. It does not claim that an application or any integration exists.
 
 ## 1. What we are building

@@ -7,3 +7,6 @@ generated/
 .env.*
 !.env.example
 *.log
+.api.log
+.durable-actors-dev.log
+.smoke-trip
