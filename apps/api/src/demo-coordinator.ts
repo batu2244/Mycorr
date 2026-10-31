@@ -17,14 +17,15 @@ import {
 } from "@mycorr/contracts"
 import { loadEnv } from "@mycorr/integrations/config"
 import { createModelProvider, type ModelProvider } from "@mycorr/integrations/model"
-import { MockRelay } from "@mycorr/integrations/relay"
+import { MockRelay, RealRelay, type RelayAdmin } from "@mycorr/integrations/relay"
 import { PERSONAL_SYSTEM, QUESTION_SYSTEM } from "./prompts.js"
 
 const env = loadEnv()
 const model: ModelProvider = createModelProvider(env)
 const questionModel: ModelProvider = env.QUESTION_MODEL_ID ? createModelProvider(env, { modelId: env.QUESTION_MODEL_ID }) : model
 console.log(`[demo-coordinator] model provider=${model.name} planning=${model.modelId} question=${questionModel.modelId}`)
-const relay = new MockRelay()
+const relay: RelayAdmin = env.RELAY_WORKSPACE_KEY ? new RealRelay(env.RELAY_WORKSPACE_KEY) : new MockRelay()
+console.log(`[demo-coordinator] relay=${relay.name}`)
 const WORKER = `api-demo-${process.pid}`
 const inflight = new Set<string>()
 
@@ -92,6 +93,23 @@ async function runPlanning(tripId: string, runId: string): Promise<void> {
   const trip = actors.TripActor.get(tripId)
   const task = await trip.claimPlanningTask(WORKER, 300_000)
   if (!task || task.runId !== runId || task.kind !== "start_run") return
+  try {
+    await runPlanningClaimed(trip, task, tripId, runId)
+  } catch (error) {
+    // Setup failures (for example a Relay error before the round loop) must not leave the run queued.
+    const message = `planning setup failed (relay=${relay.name}): ${error instanceof Error ? error.message : String(error)}`
+    console.error("[demo-coordinator]", message)
+    const current = await trip.getRun(runId).catch(() => undefined)
+    // A stale run was superseded by a replacement run; keep its stale status and only release the task.
+    if (current && !["stale", "completed", "needs_input", "failed", "cancelled"].includes(current.status)) {
+      // null (not undefined) because the actor RPC transport rejects undefined before a supplied argument.
+      await trip.finishRun(runId, "failed", null as never, message).catch((e) => console.error("[demo-coordinator] finishRun failed", e))
+    }
+    await trip.failPlanningTask(task.taskId, message, false).catch((e) => console.error("[demo-coordinator] failPlanningTask failed", e))
+  }
+}
+
+async function runPlanningClaimed(trip: ReturnType<typeof actors.TripActor.get>, task: NonNullable<Awaited<ReturnType<ReturnType<typeof actors.TripActor.get>["claimPlanningTask"]>>>, tripId: string, runId: string): Promise<void> {
   const view = (await trip.get())!
   let run = (await trip.getRun(runId))!
   const deadline = Date.now() + run.limits.deadlineMs
@@ -200,7 +218,7 @@ async function runPlanning(tripId: string, runId: string): Promise<void> {
     if (gaps.length) await trip.recordTranscript(runId, gaps.map((m) => ({ relayMessageId: m.id, tripId, runId, senderAgentId: m.fromAgent, representedUserId: [...agents.entries()].find(([, a]) => a.agentName === m.fromAgent)?.[0], channelId: m.channelId, sentAt: m.createdAt, text: m.text })))
     await trip.setCaptureStatus(runId, "complete")
     await trip.updateRunProgress(runId, { modelCalls, totalTokens, missingResponses: [...missing] })
-    if (!result) await trip.finishRun(runId, "needs_input", undefined, "agents did not produce a draft within the configured limits")
+    if (!result) await trip.finishRun(runId, "needs_input", null as never, "agents did not produce a draft within the configured limits")
     else if (result.conflicts.length || result.constraintReport.some((c) => c.outcome === "violated") || missing.size) await trip.finishRun(runId, "needs_input", result)
     else await trip.finishRun(runId, "completed", result)
     await trip.completePlanningTask(task.taskId)
@@ -208,7 +226,7 @@ async function runPlanning(tripId: string, runId: string): Promise<void> {
     unsubscribe()
     for (const s of sessions.values()) await s.close()
     await trip.updateRunProgress(runId, { modelCalls, totalTokens, missingResponses: [...missing] })
-    await trip.finishRun(runId, "failed", result, error instanceof Error ? error.message : String(error))
+    await trip.finishRun(runId, "failed", (result ?? null) as never, error instanceof Error ? error.message : String(error))
     await trip.failPlanningTask(task.taskId, error instanceof Error ? error.message : String(error), false)
   }
 }
