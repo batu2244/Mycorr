@@ -195,3 +195,29 @@ export const webhookDeliverySchema = z.object({
   sentAt: isoDateTime.optional(),
 })
 export type WebhookDelivery = z.infer<typeof webhookDeliverySchema>
+
+/** Context the runner gives a personal agent for one turn. Never includes other users' raw onboarding text. */
+export const personalTurnPhaseSchema = z.enum(["propose", "evaluate", "assemble", "respond"])
+export type PersonalTurnPhase = z.infer<typeof personalTurnPhaseSchema>
+
+export const personalTurnContextSchema = z.object({
+  phase: personalTurnPhaseSchema,
+  round: z.number().int().nonnegative(),
+  runId: z.string().min(1),
+  trip: z.object({
+    tripId: actorIdSchema,
+    title: z.string(),
+    city: z.string(),
+    dateRange: z.object({ start: z.string(), end: z.string() }),
+    timezone: z.string(),
+    context: z.string().optional(),
+  }),
+  self: z.object({ userId: actorIdSchema, agentName: z.string(), requirements: tripRequirementsSchema }),
+  participants: z.array(z.object({ userId: actorIdSchema, agentName: z.string() })),
+  proposals: z.array(proposalSchema),
+  evaluations: z.array(evaluationSchema),
+  /** Shared channel history so far (what every agent can see). */
+  history: z.array(z.object({ senderAgentId: z.string(), text: z.string() })),
+  incoming: z.object({ fromAgent: z.string(), text: z.string() }).optional(),
+})
+export type PersonalTurnContext = z.infer<typeof personalTurnContextSchema>

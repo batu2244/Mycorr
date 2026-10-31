@@ -30,6 +30,7 @@
   ],
   "dependencies": {
     "@mycorr/contracts": "workspace:*",
-    "@mycorr/actors": "workspace:*"
+    "@mycorr/actors": "workspace:*",
+    "@mycorr/integrations": "workspace:*"
   }
 }
