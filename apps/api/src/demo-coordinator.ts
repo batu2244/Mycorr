@@ -18,15 +18,15 @@ import {
 import { loadEnv } from "@mycorr/integrations/config"
 import { createModelProvider, type ModelProvider } from "@mycorr/integrations/model"
 import { MockRelay } from "@mycorr/integrations/relay"
+import { PERSONAL_SYSTEM, QUESTION_SYSTEM } from "./prompts.js"
 
 const env = loadEnv()
 const model: ModelProvider = createModelProvider(env)
+console.log(`[demo-coordinator] model provider=${model.name} model=${model.modelId}`)
 const relay = new MockRelay()
 const WORKER = `api-demo-${process.pid}`
 const inflight = new Set<string>()
 
-export const QUESTION_SYSTEM = `You are a friendly trip-planning onboarding assistant. Extract structured profile fields from the user's latest answers, ask ONE focused follow-up question for the most important missing or ambiguous field, never invent values, never guess currency/scope/timezone, and mark ambiguous answers needs_clarification. Respond with JSON matching the schema.`
-export const PERSONAL_SYSTEM = `You are a personal planning agent representing one traveller in a group discussion. Plan only inside the fixed city and date range. Respect the traveller's hard constraints. Label every cost as an unverified estimate. Respond with JSON matching the schema.`
 
 /** Processes every pending question task for a user, then delivers readiness events. Safe to call repeatedly. */
 export async function processUser(userId: string): Promise<void> {

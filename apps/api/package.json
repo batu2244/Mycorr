@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "bun run --watch src/index.ts", "start": "bun run src/index.ts" },
+  "scripts": {
+    "dev": "cd ../.. && bun run --watch apps/api/src/index.ts",
+    "start": "cd ../.. && bun run apps/api/src/index.ts"
+  },
   "dependencies": {
     "@mycorr/actors": "workspace:*",
     "@mycorr/contracts": "workspace:*",

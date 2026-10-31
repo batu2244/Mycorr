@@ -13,7 +13,7 @@
   "scripts": {
     "actors:dev": "cd packages/actors && bun run dev",
     "actors:generate": "cd packages/actors && bun run generate",
-    "api:dev": "cd apps/api && bun run dev",
+    "api:dev": "bun run --watch apps/api/src/index.ts",
     "worker:dev": "cd apps/worker && bun run dev",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "bun test tests",

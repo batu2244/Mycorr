@@ -114,7 +114,7 @@ api.get("/trips/:tripId/runs/:runId/transcript", async (c) => {
 
 app.route("/api", api)
 app.get("/health", (c) => c.json({ ok: true, mode: env.MYCORR_MODE }))
-app.use("/*", serveStatic({ root: "./public" }))
+app.use("/*", serveStatic({ root: "./apps/api/public" }))
 
 console.log(`[api] mode=${env.MYCORR_MODE} listening on http://127.0.0.1:${env.API_PORT}`)
 export default { port: env.API_PORT, fetch: app.fetch }

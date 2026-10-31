@@ -1,5 +1,5 @@
 import OpenAI from "openai"
-import { zodTextFormat } from "openai/helpers/zod"
+import { z } from "zod"
 import type { ModelProvider, StructuredRequest, StructuredResult } from "./types.js"
 
 export type OpenAIEffort = "low" | "medium" | "high"
@@ -12,8 +12,9 @@ export interface OpenAIProviderOptions {
 }
 
 /**
- * Real provider. Uses the Responses API with a Zod text format so the output is
- * schema-constrained, then re-validates with Zod before returning. Refusals,
+ * Real provider. Uses the Responses API in JSON-object mode with the JSON Schema embedded in
+ * the instructions (strict structured outputs reject our open-ended profile schema), then
+ * validates with Zod before returning. Refusals,
  * truncation, and transport errors are reported as structured failures. Nothing
  * here ever falls back to the mock provider.
  */
@@ -36,13 +37,16 @@ export class OpenAIModelProvider implements ModelProvider {
     const maxOutputTokens = request.maxTokens ?? 8000
     const usage = { inputTokens: 0, outputTokens: 0 }
     try {
-      const response = await this.client.responses.parse({
+      const jsonSchema = JSON.stringify(z.toJSONSchema(request.schema as z.ZodType, { unrepresentable: "any" }))
+      const instructions = `${request.system}\n\nRespond with ONLY a single JSON object (no prose) that validates against this JSON Schema named "${request.schemaName}":\n${jsonSchema}`
+      const reasoningCapable = /^(gpt-5|gpt-6|o\d)/.test(this.modelId)
+      const response = await this.client.responses.create({
         model: this.modelId,
-        instructions: request.system,
-        input: request.user,
+        instructions,
+        input: `Context (JSON):\n${request.user}\n\nReturn the JSON object now.`,
         max_output_tokens: maxOutputTokens,
-        reasoning: { effort: this.effort },
-        text: { format: zodTextFormat(request.schema as never, request.schemaName) },
+        ...(reasoningCapable ? { reasoning: { effort: this.effort } } : {}),
+        text: { format: { type: "json_object" } },
       })
       usage.inputTokens = response.usage?.input_tokens ?? 0
       usage.outputTokens = response.usage?.output_tokens ?? 0
@@ -56,7 +60,7 @@ export class OpenAIModelProvider implements ModelProvider {
         return { ok: false, error: `model output incomplete (${reason})`, retryable: reason === "max_output_tokens", usage, raw: response.output_text }
       }
 
-      const candidate = response.output_parsed ?? extractJson(response.output_text)
+      const candidate = extractJson(response.output_text)
       const parsed = request.schema.safeParse(candidate)
       if (!parsed.success) {
         const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")
