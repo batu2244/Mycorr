@@ -25,6 +25,11 @@ export class RealRelay implements RelayAdmin {
 
   constructor(private readonly workspaceKey: string) {
     this.relay = new AgentRelay({ workspaceKey })
+  }
+
+  /** The SDK streams events through registered agents, so start listening only after the first registration. */
+  private startListening(): void {
+    if (this.unlisten) return
     this.unlisten = this.relay.addListener("message.created", ({ message }: { message: any }) => {
       const record = toRecord(message, this.channelIds)
       if (record) this.emit(record)
@@ -39,13 +44,17 @@ export class RealRelay implements RelayAdmin {
     const client = await this.relay.workspace.register({ name: relayName(agentName), type: "agent" })
     if (!client.token) throw new Error(`relay register returned no token for ${agentName}`)
     this.clients.set(client.token, client)
+    this.startListening()
     return { agentName: client.name, agentId: client.id, apiToken: client.token }
   }
 
   /** Channels are created by a coordinator-owned agent, so the channel exists before participants join. */
   async createChannel(channelName: string, topic: string) {
     const name = relayName(channelName)
-    if (!this.admin) this.admin = await this.relay.workspace.register({ name: `mycorr-coordinator-${crypto.randomUUID().slice(0, 8)}`, type: "agent" })
+    if (!this.admin) {
+      this.admin = await this.relay.workspace.register({ name: `mycorr-coordinator-${crypto.randomUUID().slice(0, 8)}`, type: "agent" })
+      this.startListening()
+    }
     const ch = await this.admin.channels.create({ name, topic } as never)
     this.channelIds.set(name, ch.id)
     return { channelId: ch.id, channelName: name }
@@ -91,6 +100,7 @@ export class RealRelay implements RelayAdmin {
 
   async close(): Promise<void> {
     this.unlisten?.()
+    this.unlisten = undefined
     this.observers.clear()
     this.agentHandlers.clear()
   }
@@ -146,6 +156,7 @@ export class RealRelay implements RelayAdmin {
     if (!client) {
       client = await this.relay.workspace.reconnect({ apiToken })
       this.clients.set(apiToken, client)
+      this.startListening()
     }
     return client
   }
