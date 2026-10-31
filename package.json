@@ -1,0 +1,35 @@
+{
+  "name": "mycorr",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "packageManager": "bun@1.4.4",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "actors:dev": "cd packages/actors && bun run dev",
+    "actors:generate": "cd packages/actors && bun run generate",
+    "api:dev": "cd apps/api && bun run dev",
+    "worker:dev": "cd apps/worker && bun run dev",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test tests",
+    "seed": "bun run scripts/seed.ts",
+    "smoke": "bun run scripts/smoke.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.3"
+  },
+  "trustedDependencies": [
+    "esbuild"
+  ],
+  "dependencies": {
+    "@mycorr/contracts": "workspace:*",
+    "@mycorr/actors": "workspace:*"
+  }
+}

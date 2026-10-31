@@ -1,0 +1,24 @@
+{
+  "name": "@mycorr/actors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.2"
+  },
+  "exports": {
+    ".": "./src/actors.ts",
+    "./client": "./generated/index.js"
+  },
+  "scripts": {
+    "dev": "durable-actors dev",
+    "generate": "durable-actors generate src/actors.ts --out-dir generated",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mycorr/contracts": "workspace:*",
+    "durable-actors": "0.14.6",
+    "zod": "4.6.7"
+  },
+  "trustedDependencies": ["esbuild"]
+}
