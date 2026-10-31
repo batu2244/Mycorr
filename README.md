@@ -4,7 +4,7 @@ This README is an implementation brief for Claude. The project is named Mycorr. 
 
 ## 1. What we are building
 
-Mycorr is a group itinerary planner. Each person first chats privately with a question agent. The system saves every answer and builds a structured profile. When the required information is complete, a personal agent represents that person in a discussion with the agents of their friends. The group discussion runs without more messages from the people. Save the conversation. Return it through a simple API and a plain-text export.
+Mycorr is a personal agent which can be used for planning/collaborating with other people. For example, lets take the example of planning trip with friends and family. Each person first chats privately with a question agent. The system saves every answer and builds a structured profile. When the required information is complete, a personal agent represents that person in a discussion with the agents of their friends. The group discussion runs without more messages from the people. Save the conversation. Return it through a simple API and a plain-text export.
 
 Use these three services:
 
