@@ -17,6 +17,7 @@ import {
   type TranscriptCapture,
   type TranscriptMessage,
   type Trip,
+  type TripInvite,
   type TripView,
   type WebhookDelivery,
 } from "@mycorr/contracts"
@@ -126,6 +127,12 @@ const TABLES = [
     api_token TEXT NOT NULL,
     PRIMARY KEY (run_id, user_id)
   )`,
+  `CREATE TABLE IF NOT EXISTS invites (
+    token TEXT PRIMARY KEY,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    accepted_by TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS webhook_deliveries (
     event_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,
@@ -201,6 +208,43 @@ export class TripActor extends Actor {
 
   async setRelayWorkspaceRef(ref: string): Promise<void> {
     this.relayWorkspaceRef = ref
+  }
+
+  // ---- invitations --------------------------------------------------------------------
+
+  async createInvite(createdBy: string): Promise<TripInvite> {
+    if (!this.trip) throw new Error("trip does not exist")
+    if (!this.trip.participantIds.includes(createdBy)) throw new Error("only participants can invite")
+    const invite: TripInvite = { token: `inv_${crypto.randomUUID().replace(/-/g, "")}`, tripId: this.id, createdBy, createdAt: new Date().toISOString(), acceptedBy: [] }
+    this.db.exec(`INSERT INTO invites (token, created_by, created_at, accepted_by) VALUES (?, ?, ?, ?)`, invite.token, createdBy, invite.createdAt, "[]")
+    return invite
+  }
+
+  async getInvite(token: string): Promise<TripInvite | null> {
+    const row = this.db.exec(`SELECT * FROM invites WHERE token = ?`, token)[0]
+    if (!row) return null
+    return { token, tripId: this.id, createdBy: text(row.created_by)!, createdAt: text(row.created_at)!, acceptedBy: parseJson<string[]>(row.accepted_by, []) }
+  }
+
+  /** Adds the caller as a participant (new trip revision). Idempotent for existing members. Marks an active run stale. */
+  async acceptInvite(token: string, userId: string): Promise<{ tripId: string; added: boolean; staleRunId?: string }> {
+    if (!this.trip) throw new Error("trip does not exist")
+    const invite = await this.getInvite(token)
+    if (!invite) throw new Error("invalid invite")
+    if (this.trip.participantIds.includes(userId)) return { tripId: this.id, added: false }
+    const now = new Date().toISOString()
+    let staleRunId: string | undefined
+    await this.db.transaction(async () => {
+      this.trip = { ...this.trip!, participantIds: [...this.trip!.participantIds, userId], version: this.trip!.version + 1, updatedAt: now }
+      this.readiness = { ...this.readiness, [userId]: { userId, ready: false } }
+      this.db.exec(`UPDATE invites SET accepted_by = ? WHERE token = ?`, json([...invite.acceptedBy, userId]), token)
+      const active = this.activeRunId ? loadRun(this.db, this.activeRunId) : undefined
+      if (active && !TERMINAL_RUN_STATUSES.includes(active.status)) {
+        await this.applyStaleLocked(active, `participant ${userId} joined (trip v${this.trip.version})`, now)
+        staleRunId = active.runId
+      }
+    })
+    return { tripId: this.id, added: true, staleRunId }
   }
 
   // ---- readiness and automatic run start -------------------------------------------

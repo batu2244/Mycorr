@@ -35,7 +35,7 @@
     <label>Title</label><input id="title" value="Lisbon weekend" />
     <label>City</label><input id="city" value="Lisbon" />
     <div class="row"><div><label>Start</label><input id="start" type="date" value="2026-11-20" /></div><div><label>End</label><input id="end" type="date" value="2026-11-22" /></div></div>
-    <label>Other participants (comma separated ids)</label><input id="participants" value="ben" />
+    <label>Other participants (optional; or share the invite link after creating)</label><input id="participants" value="" />
     <button id="create">Create trip</button>
     <div class="muted" id="tripInfo"></div>
   </section>
@@ -75,7 +75,9 @@ $('create').onclick = async () => {
     const participantIds = $('participants').value.split(',').map(s => s.trim()).filter(Boolean);
     const view = await api('/trips', { method: 'POST', body: JSON.stringify({ title: $('title').value, city: $("city").value, dateRange: { start: $('start').value, end: $('end').value }, participantIds }) }, $('creator').value);
     $('tripId').value = view.trip.tripId; $('me').value = $('creator').value;
-    $('tripInfo').textContent = `created ${view.trip.tripId} with ${view.trip.participantIds.join(', ')}`;
+    const inv = await api(`/trips/${view.trip.tripId}/invites`, { method: 'POST' }, $('creator').value);
+    $('tripInfo').innerHTML = `created ${view.trip.tripId}<br>Invite link: <a href="${inv.url}" target="_blank">${inv.url}</a> <button class="secondary" id="copy" style="margin:0;padding:4px 8px">copy</button>`;
+    $('copy').onclick = () => navigator.clipboard.writeText(inv.url).then(() => { $('copy').textContent = 'copied'; });
     await poll();
   } catch (e) { $('tripInfo').textContent = 'error: ' + e.message; }
 };

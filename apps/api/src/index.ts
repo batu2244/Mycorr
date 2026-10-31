@@ -118,6 +118,46 @@ api.get("/trips/:tripId/runs/:runId/transcript", async (c) => {
   return c.json({ runId, captureStatus: run.captureStatus, transcript })
 })
 
+// ---- invitations (public read + accept with a chosen development identity) ----
+api.post("/trips/:tripId/invites", async (c) => {
+  const r = await requireParticipant(c.req.param("tripId"), c.get("userId"))
+  if ("error" in r) return c.json({ error: r.error }, r.status)
+  const invite = await r.trip.createInvite(c.get("userId"))
+  return c.json({ ...invite, url: `${env.PUBLIC_BACKEND_URL}/invite/${invite.tripId}/${invite.token}` }, 201)
+})
+
+app.get("/api/invites/:tripId/:token", async (c) => {
+  const { tripId, token } = c.req.param()
+  const trip = actors.TripActor.get(tripId)
+  if (!(await trip.exists())) return c.json({ error: { code: "not_found", message: "invitation not found" } }, 404)
+  const invite = await trip.getInvite(token)
+  if (!invite) return c.json({ error: { code: "not_found", message: "invitation not found" } }, 404)
+  const view = (await trip.get())!
+  // Public summary only: no readiness, no runs, no private data.
+  const { tripId: id, title, city, dateRange, creatorId, participantIds } = view.trip
+  return c.json({ invite: { token: invite.token, createdBy: invite.createdBy }, trip: { tripId: id, title, city, dateRange, creatorId, participantIds } })
+})
+
+app.post("/api/invites/:tripId/:token/accept", async (c) => {
+  const { tripId, token } = c.req.param()
+  const userId = c.req.header("x-mycorr-user")
+  if (!userId || !/^[A-Za-z0-9._-]{1,128}$/.test(userId)) return c.json({ error: { code: "unauthenticated", message: "choose a name first (development identity)" } }, 401)
+  const trip = actors.TripActor.get(tripId)
+  if (!(await trip.exists())) return c.json({ error: { code: "not_found", message: "invitation not found" } }, 404)
+  let result: { tripId: string; added: boolean; staleRunId?: string }
+  try {
+    result = await trip.acceptInvite(token, userId)
+  } catch (e) {
+    return c.json({ error: { code: "invalid_invite", message: e instanceof Error ? e.message : String(e) } }, 400)
+  }
+  const view = (await trip.get())!
+  await actors.RegistryActor.get("global").registerTrip(tripId, [userId])
+  await actors.UserActor.get(userId).startOnboarding({ tripId, title: view.trip.title, city: view.trip.city, dateRange: view.trip.dateRange, timezone: view.trip.timezone, context: view.trip.context })
+  return c.json({ tripId, userId, added: result.added, staleRunId: result.staleRunId }, result.added ? 201 : 200)
+})
+
+app.get("/invite/:tripId/:token", serveStatic({ path: "./apps/api/public/invite.html" }))
+
 app.route("/api", api)
 app.get("/health", (c) => c.json({ ok: true, mode: env.MYCORR_MODE }))
 app.use("/*", serveStatic({ root: "./apps/api/public" }))

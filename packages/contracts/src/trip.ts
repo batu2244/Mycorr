@@ -30,7 +30,7 @@ export const createTripInputSchema = z.object({
   /** Optional. The backend derives the timezone from the city; a valid IANA value here overrides it. */
   timezone: z.string().min(1).optional(),
   context: z.string().max(4000).optional(),
-  participantIds: z.array(actorIdSchema).min(1),
+  participantIds: z.array(actorIdSchema).default([]),
 })
 export type CreateTripInput = z.infer<typeof createTripInputSchema>
 
@@ -61,3 +61,13 @@ export function tripDayCount(range: DateRange): number {
   const end = Date.parse(`${range.end}T00:00:00Z`)
   return Math.round((end - start) / 86_400_000) + 1
 }
+
+/** Shareable invitation to join a trip. Accepting adds the caller as a participant and starts onboarding. */
+export const tripInviteSchema = z.object({
+  token: z.string().min(1),
+  tripId: actorIdSchema,
+  createdBy: actorIdSchema,
+  createdAt: isoDateTime,
+  acceptedBy: z.array(actorIdSchema),
+})
+export type TripInvite = z.infer<typeof tripInviteSchema>
