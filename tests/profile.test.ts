@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
+  FIELD_KEYS,
+  ONBOARDING_REQUIRED_KEYS,
   PROFILE_SCHEMA_VERSION,
   computeMissingFields,
   validateFieldValue,
@@ -12,7 +14,18 @@ const answered = (value: unknown) => ({ status: "answered" as const, value, supp
 describe("profile completeness", () => {
   test("empty requirements are entirely missing", () => {
     const req: TripRequirements = { schemaVersion: PROFILE_SCHEMA_VERSION, profileVersion: 0, fields: {} }
-    expect(computeMissingFields(req)).toEqual(["availability", "flexibility", "dailyBudget", "totalBudget", "preferences"])
+    expect(computeMissingFields(req, FIELD_KEYS)).toEqual(["availability", "flexibility", "dailyBudget", "totalBudget", "preferences"])
+  })
+
+  test("onboarding currently requires only restaurant preferences", () => {
+    const req: TripRequirements = { schemaVersion: PROFILE_SCHEMA_VERSION, profileVersion: 0, fields: {} }
+    expect(ONBOARDING_REQUIRED_KEYS).toEqual(["preferences"])
+    expect(computeMissingFields(req)).toEqual(["preferences"])
+    const withPrefs: TripRequirements = {
+      ...req,
+      fields: { preferences: answered({ kind: "stated", interests: [{ category: "restaurants", detail: "sushi, ramen" }], dislikes: [], priorities: [] }) },
+    }
+    expect(computeMissingFields(withPrefs)).toEqual([])
   })
 
   test("a complete, valid profile has no missing fields", () => {
@@ -36,7 +49,7 @@ describe("profile completeness", () => {
       profileVersion: 1,
       fields: { dailyBudget: answered({ kind: "amount", amountMinor: "100" }) },
     }
-    expect(computeMissingFields(req)).toContain("dailyBudget")
+    expect(computeMissingFields(req, FIELD_KEYS)).toContain("dailyBudget")
   })
 
   test("needs_clarification is not complete", () => {
@@ -47,7 +60,7 @@ describe("profile completeness", () => {
         dailyBudget: { status: "needs_clarification", note: "daily or total?", supportingAnswerIds: ["m1"], updatedAt: now },
       },
     }
-    expect(computeMissingFields(req)).toContain("dailyBudget")
+    expect(computeMissingFields(req, FIELD_KEYS)).toContain("dailyBudget")
   })
 
   test("budget scope and currency are never defaulted", () => {

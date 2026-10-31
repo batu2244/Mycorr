@@ -132,6 +132,13 @@ export const REQUIRED_FIELDS: readonly RequiredFieldSpec[] = [
   },
 ]
 
+/**
+ * Fields the onboarding chat asks for right now. Everything else in REQUIRED_FIELDS
+ * stays defined and versioned, but does not block readiness until it is added here.
+ * Current product decision (2026-10-31): keep onboarding to restaurant preferences only.
+ */
+export const ONBOARDING_REQUIRED_KEYS: readonly FieldKey[] = ["preferences"]
+
 // ---- Field state with provenance -------------------------------------------
 
 export const fieldStateSchema = z.object({
@@ -179,19 +186,24 @@ export function validateFieldValue(
  * `answered` AND its stored value validates against the current field schema.
  * Fields absent from the record (e.g. newly added required fields) are `missing`.
  */
-export function computeMissingFields(requirements: TripRequirements): FieldKey[] {
+export function computeMissingFields(requirements: TripRequirements, keys: readonly FieldKey[] = ONBOARDING_REQUIRED_KEYS): FieldKey[] {
   const missing: FieldKey[] = []
-  for (const spec of REQUIRED_FIELDS) {
-    const state = requirements.fields[spec.key]
+  for (const key of keys) {
+    const state = requirements.fields[key]
     if (!state || state.status !== "answered") {
-      missing.push(spec.key)
+      missing.push(key)
       continue
     }
-    if (!validateFieldValue(spec.key, state.value).ok) missing.push(spec.key)
+    if (!validateFieldValue(key, state.value).ok) missing.push(key)
   }
   return missing
 }
 
-export function isProfileComplete(requirements: TripRequirements): boolean {
-  return computeMissingFields(requirements).length === 0
+export function isProfileComplete(requirements: TripRequirements, keys: readonly FieldKey[] = ONBOARDING_REQUIRED_KEYS): boolean {
+  return computeMissingFields(requirements, keys).length === 0
+}
+
+/** The REQUIRED_FIELDS specs that are active for onboarding, in spec order. */
+export function activeRequiredFields(keys: readonly FieldKey[] = ONBOARDING_REQUIRED_KEYS): RequiredFieldSpec[] {
+  return REQUIRED_FIELDS.filter((f) => keys.includes(f.key))
 }

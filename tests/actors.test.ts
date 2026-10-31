@@ -74,7 +74,9 @@ describe("UserActor onboarding", () => {
     if (partial.outcome !== "applied") throw new Error("unreachable")
     expect(partial.ready).toBe(false)
     expect(partial.rejectedFields.length).toBe(1)
-    expect(partial.missingFields).toContain("dailyBudget")
+    // Readiness is driven by ONBOARDING_REQUIRED_KEYS (preferences only right now); the budget was rejected, not stored.
+    expect(partial.missingFields).toContain("preferences")
+    expect(partial.missingFields).not.toContain("availability")
 
     const state = await u.getOnboarding(tripId)
     expect(state!.messages.map((m) => m.role)).toEqual(["user", "assistant"])

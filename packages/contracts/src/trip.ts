@@ -27,7 +27,8 @@ export const createTripInputSchema = z.object({
   title: z.string().min(1).max(200),
   city: z.string().min(1).max(200),
   dateRange: dateRangeSchema,
-  timezone: z.string().min(1).default("UTC"),
+  /** Optional. The backend derives the timezone from the city; a valid IANA value here overrides it. */
+  timezone: z.string().min(1).optional(),
   context: z.string().max(4000).optional(),
   participantIds: z.array(actorIdSchema).min(1),
 })

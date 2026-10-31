@@ -4,10 +4,13 @@ import { serveStatic } from "hono/bun"
 import { actors } from "@mycorr/actors/client"
 import { createTripInputSchema, onboardingMessageInputSchema, newId } from "@mycorr/contracts"
 import { loadEnv } from "@mycorr/integrations/config"
+import { createModelProvider } from "@mycorr/integrations/model"
+import { resolveTimezone } from "@mycorr/integrations/timezone"
 import { processUser, startRunIfReady } from "./demo-coordinator.js"
 import { renderTranscriptText } from "./transcript-text.js"
 
 const env = loadEnv()
+const timezoneModel = createModelProvider(env)
 const app = new Hono()
 app.use("/api/*", cors())
 
@@ -40,10 +43,13 @@ api.post("/trips", async (c) => {
   const input = parsed.data
   const participantIds = Array.from(new Set([creatorId, ...input.participantIds]))
   const tripId = newId("trip")
+  // Timezone is derived from the city; the creator is never asked for it. A valid IANA value in the body still wins.
+  const tz = await resolveTimezone(input.city, input.timezone, timezoneModel)
+  if (!tz.derived && tz.source === "fallback") console.warn(`[api] could not derive a timezone for "${input.city}", using UTC`)
   const trip = actors.TripActor.get(tripId)
-  await trip.create({ tripId, title: input.title, city: input.city, dateRange: input.dateRange, timezone: input.timezone, context: input.context, creatorId, participantIds })
+  await trip.create({ tripId, title: input.title, city: input.city, dateRange: input.dateRange, timezone: tz.timezone, context: input.context, creatorId, participantIds })
   await actors.RegistryActor.get("global").registerTrip(tripId, participantIds)
-  const summary = { tripId, title: input.title, city: input.city, dateRange: input.dateRange, timezone: input.timezone, context: input.context }
+  const summary = { tripId, title: input.title, city: input.city, dateRange: input.dateRange, timezone: tz.timezone, context: input.context }
   await Promise.all(participantIds.map((u) => actors.UserActor.get(u).startOnboarding(summary)))
   return c.json(await trip.get(), 201)
 })
