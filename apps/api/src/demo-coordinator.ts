@@ -232,8 +232,19 @@ async function runPlanningClaimed(trip: ReturnType<typeof actors.TripActor.get>,
 }
 
 /** Backend-side check of supported hard constraints (daily budget, dislikes). Unknown costs are reported as unverified. */
-function checkConstraints(participants: RunParticipantSnapshot[], itinerary: RunResult["itinerary"] & object): RunResult["constraintReport"] {
+export function checkConstraints(participants: RunParticipantSnapshot[], itinerary: RunResult["itinerary"] & object): RunResult["constraintReport"] {
   const report: RunResult["constraintReport"] = []
+  // Schedule sanity (participant-independent): no two items on a day may overlap in time.
+  for (const day of itinerary.days) {
+    const timed = day.items.filter((i) => i.startTime && i.endTime).sort((a, b) => a.startTime!.localeCompare(b.startTime!))
+    for (let k = 1; k < timed.length; k++) {
+      const prev = timed[k - 1]!
+      const cur = timed[k]!
+      if (cur.startTime! < prev.endTime!) {
+        report.push({ userId: itinerary.assembledByUserId, check: `schedule overlap ${day.date}`, outcome: "violated", detail: `"${prev.title}" (${prev.startTime}-${prev.endTime}) overlaps "${cur.title}" (${cur.startTime}-${cur.endTime})` })
+      }
+    }
+  }
   for (const p of participants) {
     const daily = p.requirements.fields.dailyBudget?.value as { kind: string; amountMinor?: number; currency?: string } | undefined
     const prefs = p.requirements.fields.preferences?.value as { kind: string; dislikes?: { category: string }[] } | undefined
